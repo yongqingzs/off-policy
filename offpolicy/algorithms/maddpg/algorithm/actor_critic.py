@@ -49,6 +49,9 @@ class MADDPG_Critic(nn.Module):
     :param central_act_dim: (int) dimension of the centralized action vector.
     :param device: (torch.device) specifies the device to run on (cpu/gpu).
     :param num_q_outs: (int) number of q values to output (1 for MADDPG, 2 for MATD3).
+    
+    修改:
+    1. 在init_()添加.to(**self.tpdv)以消除cuda错误
     """
     def __init__(self, args, central_obs_dim, central_act_dim, device, num_q_outs=1):
         super(MADDPG_Critic, self).__init__()
@@ -62,8 +65,8 @@ class MADDPG_Critic(nn.Module):
         self.mlp = MLPBase(args, input_dim)
 
         init_method = [nn.init.xavier_uniform_, nn.init.orthogonal_][self._use_orthogonal]
-        def init_(m):
-            return init(m, init_method, lambda x: nn.init.constant_(x, 0))
+        def init_(m):  # +
+            return init(m, init_method, lambda x: nn.init.constant_(x, 0)).to(**self.tpdv)
         self.q_outs = [init_(nn.Linear(self.hidden_size, 1)) for _ in range(num_q_outs)]
         
         self.to(device)

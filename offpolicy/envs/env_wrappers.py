@@ -107,7 +107,7 @@ class ShareVecEnv(ABC):
         return self.step_wait()
 
     def render(self, mode='human'):
-        from utils.util import tile_images
+        from offpolicy.utils.util import tile_images
         imgs = self.get_images()
         bigimg = tile_images(imgs)
         if mode == 'human':
@@ -126,10 +126,11 @@ class ShareVecEnv(ABC):
 
     @property
     def unwrapped(self):
-        if isinstance(self, VecEnvWrapper):
-            return self.venv.unwrapped
-        else:
-            return self
+        # if isinstance(self, VecEnvWrapper):
+        #     return self.venv.unwrapped
+        # else:
+        #     return self
+        return self
 
     def get_viewer(self):
         if self.viewer is None:
@@ -438,6 +439,15 @@ class DummyVecEnv(ShareVecEnv):
         for env in self.envs:
             env.close()
 
+    def render(self, mode="human"):
+        if mode == "rgb_array":
+            return np.array([env.render(mode=mode) for env in self.envs])
+        elif mode == "human":
+            for env in self.envs:
+                env.render(mode=mode)
+        else:
+            raise NotImplementedError
+
 
 class ShareDummyVecEnv(ShareVecEnv):
     def __init__(self, env_fns):
@@ -466,6 +476,15 @@ class ShareDummyVecEnv(ShareVecEnv):
         for env in self.envs:
             env.close()
 
+    def render(self, mode="human"):
+        if mode == "rgb_array":
+            return np.array([env.render(mode=mode) for env in self.envs])
+        elif mode == "human":
+            for env in self.envs:
+                env.render(mode=mode)
+        else:
+            raise NotImplementedError
+        
 
 class ChooseDummyVecEnv(ShareVecEnv):
     def __init__(self, env_fns):
@@ -494,3 +513,13 @@ class ChooseDummyVecEnv(ShareVecEnv):
     def close(self):
         for env in self.envs:
             env.close()
+
+    def render(self, mode="human"):
+        if mode == "rgb_array":
+            return np.array([env.render(mode=mode) for env in self.envs])
+        elif mode == "human":
+            for env in self.envs:
+                env.render(mode=mode)
+        else:
+            raise NotImplementedError
+        

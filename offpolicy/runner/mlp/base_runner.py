@@ -17,6 +17,9 @@ class MlpRunner(object):
         Base class for training MLP policies.
 
         :param config: (dict) Config dictionary containing parameters for training.
+        
+        修改:
+        1. 添加了use_render
         """
         # non-tunable hyperparameters are in args
         self.args = config["args"]
@@ -53,6 +56,9 @@ class MlpRunner(object):
         self.last_log_T = 0
         self.last_hard_update_T = 0
 
+        # +
+        self.use_render = self.args.use_render
+
         if config.__contains__("take_turn"):
             self.take_turn = config["take_turn"]
         else:
@@ -80,21 +86,25 @@ class MlpRunner(object):
         self.env = config["env"]
         self.eval_env = config["eval_env"]
         self.num_envs = self.env.num_envs
-        self.num_eval_envs = self.eval_env.num_envs
+        if self.eval_env is not None:
+            self.num_eval_envs = self.eval_env.num_envs
 
         # dir
         self.model_dir = self.args.model_dir
-        if self.use_wandb:
-            self.save_dir = str(wandb.run.dir)
+        if self.use_render:
+            print('use_render')
         else:
-            self.run_dir = config["run_dir"]
-            self.log_dir = str(self.run_dir / 'logs')
-            if not os.path.exists(self.log_dir):
-                os.makedirs(self.log_dir)
-            self.writter = SummaryWriter(self.log_dir)
-            self.save_dir = str(self.run_dir / 'models')
-            if not os.path.exists(self.save_dir):
-                os.makedirs(self.save_dir)
+            if self.use_wandb:
+                self.save_dir = str(wandb.run.dir)
+            else:
+                self.run_dir = config["run_dir"]
+                self.log_dir = str(self.run_dir / 'logs')
+                if not os.path.exists(self.log_dir):
+                    os.makedirs(self.log_dir)
+                self.writter = SummaryWriter(self.log_dir)
+                self.save_dir = str(self.run_dir / 'models')
+                if not os.path.exists(self.save_dir):
+                    os.makedirs(self.save_dir)
 
         # initialize all the policies and organize the agents corresponding to each policy
         if self.algorithm_name == "matd3":
@@ -103,9 +113,9 @@ class MlpRunner(object):
         elif self.algorithm_name == "maddpg":
             from offpolicy.algorithms.maddpg.algorithm.MADDPGPolicy import MADDPGPolicy as Policy
             from offpolicy.algorithms.maddpg.maddpg import MADDPG as TrainAlgo
-        elif self.algorithm_name == "masac":
-            from offpolicy.algorithms.masac.algorithm.MASACPolicy import MASACPolicy as Policy
-            from offpolicy.algorithms.masac.masac import MASAC as TrainAlgo
+        # elif self.algorithm_name == "masac":
+        #     from offpolicy.algorithms.masac.algorithm.MASACPolicy import MASACPolicy as Policy
+        #     from offpolicy.algorithms.masac.masac import MASAC as TrainAlgo
         elif self.algorithm_name == "mqmix":
             from offpolicy.algorithms.mqmix.algorithm.mQMixPolicy import M_QMixPolicy as Policy
             from offpolicy.algorithms.mqmix.mqmix import M_QMix as TrainAlgo
@@ -350,3 +360,4 @@ class MlpRunner(object):
     def collect_rollout(self):
         """Collect a rollout and store the transitions in the buffer."""
         raise NotImplementedError
+    

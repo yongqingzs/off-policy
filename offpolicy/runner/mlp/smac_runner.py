@@ -180,3 +180,4 @@ class SMACRunner(MlpRunner):
         self.env_infos = {}
 
         self.env_infos['average_step_rewards'] = []
+        

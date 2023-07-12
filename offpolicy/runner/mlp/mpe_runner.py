@@ -6,6 +6,10 @@ import time
 from offpolicy.utils.util import is_multidiscrete
 from offpolicy.runner.mlp.base_runner import MlpRunner
 
+"""
+根据onpolicy，render均在MlpRunner/RecRunner的子类中添加
+"""
+
 class MPERunner(MlpRunner):
     def __init__(self, config):
         """Runner class for the Multi-Agent Particle Env (MPE)  environment. See parent class for more information."""
@@ -13,8 +17,9 @@ class MPERunner(MlpRunner):
         self.collecter = self.shared_collect_rollout if self.share_policy else self.separated_collect_rollout
         # fill replay buffer with random actions
         self.finish_first_train_reset = False
-        num_warmup_episodes = max((int(self.batch_size//self.episode_length) + 1, self.args.num_random_episodes))
-        self.warmup(num_warmup_episodes)
+        if self.use_render is False:
+            num_warmup_episodes = max((int(self.batch_size//self.episode_length) + 1, self.args.num_random_episodes))
+            self.warmup(num_warmup_episodes)
         self.start = time.time()
         self.log_clear()
 
@@ -26,12 +31,116 @@ class MPERunner(MlpRunner):
         eval_infos['average_episode_rewards'] = []
 
         for _ in range(self.args.num_eval_episodes):
-            env_info = self.collecter( explore=False, training_episode=False, warmup=False)
+            env_info = self.collecter(explore=False, training_episode=False, warmup=False)
             for k, v in env_info.items():
                 eval_infos[k].append(v)
 
         self.log_env(eval_infos, suffix="eval_")
 
+    @torch.no_grad()
+    def render(self):
+        """
+        现在只有最基础的评估奖励
+        """
+        env = self.env
+        env_info = {}
+        self.trainer.prep_rollout()  # like onpolicy.mpe_runner
+        n_rollout_threads = 1
+        explore = False
+
+        if self.share_policy:
+            p_id = "policy_0"
+            policy = self.policies[p_id]
+            obs = env.reset()
+            share_obs = obs.reshape(n_rollout_threads, -1)  # n_rollout_threads = 1
+
+            # init
+            episode_rewards = []
+            
+            for step in range(self.episode_length):
+                obs_batch = np.concatenate(obs)
+                # get actions for all agents to step the env
+                acts_batch, _ = policy.get_actions(obs_batch,
+                                                    t_env=self.total_env_steps,
+                                                    explore=explore)
+                if not isinstance(acts_batch, np.ndarray):
+                    acts_batch = acts_batch.cpu().detach().numpy()
+                env_acts = np.split(acts_batch, n_rollout_threads)
+
+                # env step and store the relevant episode information
+                next_obs, rewards, dones, infos = env.step(env_acts)
+
+                episode_rewards.append(rewards)
+                dones_env = np.all(dones, axis=1)
+
+                env.render('human')  # +
+
+                if not explore and np.all(dones_env):
+                    average_episode_rewards = np.mean(np.sum(episode_rewards, axis=0))
+                    print("average episode rewards is: " + str(average_episode_rewards))
+                    env_info['average_episode_rewards'] = average_episode_rewards
+                    return env_info
+        else:
+            assert self.share_policy is False, 'The share_policy is error.'
+            obs = env.reset()
+            share_obs = []
+            for o in obs:
+                share_obs.append(list(chain(*o)))
+            share_obs = np.array(share_obs)
+
+            agent_obs = []
+            for agent_id in range(self.num_agents):
+                env_obs = []
+                for o in obs:
+                    env_obs.append(o[agent_id])
+                env_obs = np.array(env_obs)
+                agent_obs.append(env_obs)
+
+            # [agents, parallel envs, dim]
+            episode_rewards = []
+
+            acts = []
+            for p_id in self.policy_ids:
+                if is_multidiscrete(self.policy_info[p_id]['act_space']):
+                    self.sum_act_dim = int(np.sum(self.policy_act_dim[p_id]))
+                else:
+                    self.sum_act_dim = self.policy_act_dim[p_id]
+                temp_act = np.zeros((n_rollout_threads, self.sum_act_dim))
+                acts.append(temp_act)
+
+            for step in range(self.episode_length):
+                for agent_id, p_id in zip(self.agent_ids, self.policy_ids):
+                    policy = self.policies[p_id]
+                    # get actions for all agents to step the env
+                    act, _ = policy.get_actions(agent_obs[agent_id],
+                                                t_env=self.total_env_steps,
+                                                explore=explore)
+
+                    if not isinstance(act, np.ndarray):
+                        act = act.cpu().detach().numpy()
+                    acts[agent_id] = act
+
+                env_acts = []
+                for i in range(n_rollout_threads):
+                    env_act = []
+                    for agent_id in range(self.num_agents):
+                        env_act.append(acts[agent_id][i])
+                    env_acts.append(env_act)
+
+                # env step and store the relevant episode information
+                next_obs, rewards, dones, infos = env.step(env_acts)
+
+                episode_rewards.append(rewards)
+                dones_env = np.all(dones, axis=1)
+
+                env.render('human')  # +
+
+                if not explore and np.all(dones_env):
+                    average_episode_rewards = np.mean(np.sum(episode_rewards, axis=0))
+                    print("average episode rewards is: " + str(average_episode_rewards))
+                    env_info['average_episode_rewards'] = average_episode_rewards
+                    return env_info
+                
     # for mpe-simple_spread and mpe-simple_reference
     def shared_collect_rollout(self, explore=True, training_episode=True, warmup=False):
         """

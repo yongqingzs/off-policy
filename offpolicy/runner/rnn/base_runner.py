@@ -52,6 +52,9 @@ class RecRunner(object):
         self.last_log_T = 0 # last timestep after which information was logged
         self.last_hard_update_episode = 0 # last episode after which target policy was updated to equal live policy
 
+        # +
+        self.use_render = self.args.use_render
+
         if config.__contains__("take_turn"):
             self.take_turn = config["take_turn"]
         else:
@@ -94,17 +97,20 @@ class RecRunner(object):
 
         # dir
         self.model_dir = self.args.model_dir
-        if self.use_wandb:
-            self.save_dir = str(wandb.run.dir)
+        if self.use_render:
+            print('use_render')
         else:
-            self.run_dir = config["run_dir"]
-            self.log_dir = str(self.run_dir / 'logs')
-            if not os.path.exists(self.log_dir):
-                os.makedirs(self.log_dir)
-            self.writter = SummaryWriter(self.log_dir)
-            self.save_dir = str(self.run_dir / 'models')
-            if not os.path.exists(self.save_dir):
-                os.makedirs(self.save_dir)
+            if self.use_wandb:
+                self.save_dir = str(wandb.run.dir)
+            else:
+                self.run_dir = config["run_dir"]
+                self.log_dir = str(self.run_dir / 'logs')
+                if not os.path.exists(self.log_dir):
+                    os.makedirs(self.log_dir)
+                self.writter = SummaryWriter(self.log_dir)
+                self.save_dir = str(self.run_dir / 'models')
+                if not os.path.exists(self.save_dir):
+                    os.makedirs(self.save_dir)
 
         # initialize all the policies and organize the agents corresponding to each policy
         if self.algorithm_name == "rmatd3":
@@ -115,11 +121,11 @@ class RecRunner(object):
                 "rmaddpg only supports actor_train_interval_step=1.")
             from offpolicy.algorithms.r_maddpg.algorithm.rMADDPGPolicy import R_MADDPGPolicy as Policy
             from offpolicy.algorithms.r_maddpg.r_maddpg import R_MADDPG as TrainAlgo
-        elif self.algorithm_name == "rmasac":
-            assert self.actor_train_interval_step == 1, (
-                "rmasac only support actor_train_interval_step=1.")
-            from offpolicy.algorithms.r_masac.algorithm.rMASACPolicy import R_MASACPolicy as Policy
-            from offpolicy.algorithms.r_masac.r_masac import R_MASAC as TrainAlgo
+        # elif self.algorithm_name == "rmasac":
+        #     assert self.actor_train_interval_step == 1, (
+        #         "rmasac only support actor_train_interval_step=1.")
+        #     from offpolicy.algorithms.r_masac.algorithm.rMASACPolicy import R_MASACPolicy as Policy
+        #     from offpolicy.algorithms.r_masac.r_masac import R_MASAC as TrainAlgo
         elif self.algorithm_name == "qmix":
             from offpolicy.algorithms.qmix.algorithm.QMixPolicy import QMixPolicy as Policy
             from offpolicy.algorithms.qmix.qmix import QMix as TrainAlgo
@@ -376,3 +382,4 @@ class RecRunner(object):
     def collect_rollout(self):
         """Collect a rollout and store it in the buffer."""
         raise NotImplementedError
+    

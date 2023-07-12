@@ -191,4 +191,7 @@ def get_config():
     # pretained parameters
     parser.add_argument("--model_dir", type=str, default=None)
 
+    # + render
+    parser.add_argument("--use_render", action='store_true', default=False)
+
     return parser
